@@ -1,67 +1,65 @@
-# LifePointe Assimilation Survey
+# LifePointe Breakout Survey — multi-team
 
-A guided-conversation survey + auto-built presentation for the Assimilation breakout at the LifePointe leaders retreat. Members walk through a **diagnosis → imagination → prioritisation → action** conversation on their phones; their input lands in a Google Sheet; the presenter curates it into a branded 8-slide deck.
+A guided-conversation survey + AI-assisted presentation for the leadership-retreat breakouts. Everyone scans **one QR**, chooses their **team** (Assimilation, Missions, Discipleship, Life Groups), and walks a **diagnosis → imagination → prioritisation → action** conversation on their phone. Each team's input lands in its **own tab** of one Google Sheet. Each team lead opens their **own deck**, lets **Gemini draft the slides** from the live submissions, edits, and presents.
 
-**Live pages (GitHub Pages):**
+**Live pages:**
 
 | Page | URL | Use |
 |---|---|---|
-| Splash / QR | `https://jekayode.github.io/lpassiliatiomsurvey/splash.html` | Show on the LED/projector first — members scan to join |
-| Form | `https://jekayode.github.io/lpassiliatiomsurvey/` | The guided survey members fill on their phones |
-| Presentation | `https://jekayode.github.io/lpassiliatiomsurvey/present.html` | Presenter setup + Back/Next deck |
+| Splash / QR | `…/splash.html` | Show on the LED first — everyone scans |
+| Form (chooser) | `…/` | Choose a group → guided survey |
+| Presentation index | `…/present.html` | Pick a team → its deck |
+| A team's deck | `…/present.html?team=<id>` | The team lead's setup + slides |
+
+Team ids: `assimilation`, `missions`, `discipleship`, `lifegroups`.
 
 ## Architecture
 
 ```
-Member's phone ──► index.html (static, GitHub Pages)
-                      │  fetch POST (JSON)
-                      ▼
-              Google Apps Script /exec  ──►  Google Sheet ("Responses" tab)
-                      ▲
-                      │  fetch GET (JSON)
-Projector ──► present.html (static, GitHub Pages)
+Phone ─► index.html (choose team) ─POST {team,…}─► Apps Script ─► Sheet tab  Responses_<team>
+Projector ─► present.html?team=X ─GET responses/summarize&team=X─► Apps Script ─► Gemini + Sheet
 ```
 
-`config.js` is the single connection point between the static pages and the Google Sheet backend.
+- `config.js` — `SCRIPT_URL` (Apps Script `/exec`) + `FORM_URL` (QR target).
+- `teams.js` — **per-team wording** (objective + a few re-worded questions + journey stages + what-if prompts). Edit this to finalize each team.
 
-## One-time setup (~5 minutes)
+## Setup (once)
 
-1. **Create the Sheet.** Go to [sheets.new](https://sheets.new), name it e.g. *Assimilation Survey*.
-2. **Add the backend.** In the Sheet: **Extensions → Apps Script**. Delete the starter code and paste the contents of [`apps-script/Code.gs`](apps-script/Code.gs). Save.
-3. **Deploy.** **Deploy → New deployment** → gear → **Web app**:
-   - Execute as: **Me**
-   - Who has access: **Anyone** ← lets members submit without a Google login
-   Click **Deploy**, authorize (choose **Advanced → Go to … (unsafe)** on the unverified-app screen — it's your own script), and copy the **Web app URL** (ends in `/exec`).
-4. **Connect the site.** Open [`config.js`](config.js) and paste that URL into `SCRIPT_URL`. Commit and push (or edit the file directly on GitHub — Pages redeploys automatically).
+1. **Backend:** in your Google Sheet → **Extensions → Apps Script** → paste [`apps-script/Code.gs`](apps-script/Code.gs).
+2. **Gemini key (for AI slides):** get a free key at <https://aistudio.google.com/apikey>. In Apps Script → **Project Settings → Script properties** → add `GEMINI_API_KEY = <your key>`. (Submissions and reads work without it; only the AI summaries need it. Run **Breakouts → Check Gemini key** to confirm.)
+3. **Deploy:** **Deploy → New deployment → Web app** (Execute as **Me**, access **Anyone**). Copy the `/exec` URL into [`config.js`](config.js) → `SCRIPT_URL`.
+   - Updating later: **Deploy → Manage deployments → New version** — the URL stays the same.
+4. **Finalize wording:** edit [`teams.js`](teams.js) — set each team's objective, the re-worded questions, journey stages, and what-if prompts (Missions is a placeholder; Discipleship & Life Groups inherit base wording until you edit them). Commit + push.
 
-Until `SCRIPT_URL` is set, the pages run in **preview mode**: the form simulates sending and the presentation shows sample data, so you can rehearse safely.
+Each team's tab (`Responses_<team>`) is created automatically on first submission.
 
-### Smoke test (do this once)
-1. Open the form, add one idea, send it → a row appears in the Sheet's **Responses** tab.
-2. Open the presentation, click **Refresh** → your test idea shows. Delete the test row afterwards.
+### Smoke test
+Choose a group → submit one idea → a row appears in that team's tab. Open `present.html?team=<that team>` → **Generate with AI** → a drafted deck appears → **Start presentation**.
 
-## At the retreat
+## On the day
 
-1. Put **splash.html** full-screen on the LED — it shows a QR code to the form.
-2. Members scan and walk through the guided questions (everything optional; Back/Next).
-3. During prioritisation, open **present.html**: click **Refresh** to pull the latest submissions, tick the best ~3 per section, pick/edit the vision sentence and the one big idea.
-4. Click **Start presentation** — navigate with the on-screen arrows, keyboard **← →**, or the dots. **Esc** exits.
+1. **splash.html** on the LED → everyone scans, **chooses their group**, fills the guided survey.
+2. Each **team lead** opens **present.html**, picks their team, clicks **Refresh** to pull submissions, then either:
+   - **Generate with AI** — Gemini drafts problem / vision / quick wins / 90-day / long-term / big idea into editable fields; tweak, then **Start presentation**; or
+   - **Curate manually** — tick the best ~3 per section (the AI step is optional).
+3. Present with the on-screen arrows, keyboard **← →**, or dots. **Esc** exits.
 
 ## Good to know
 
-- **Updating the backend later:** edit the script, then **Deploy → Manage deployments → ✏️ → New version → Deploy**. The `/exec` URL stays the same.
-- **Reusing a Sheet from an older version:** the schema includes a **Why** column — delete/clear the old *Responses* tab and it rebuilds with correct headers on the next submission.
-- **If your Workspace blocks "Anyone":** set access to **"Anyone with a Google account"**; members then just need to be signed into any Google account.
-- **QR target:** the QR encodes `FORM_URL` from `config.js` — update it if you ever move the site or add a custom domain.
+- **Summaries in the Sheet:** menu **Breakouts → Rebuild all summaries** creates a readable `Summary_<team>` tab per team, grouped by section.
+- **Concurrency:** submissions are lock-guarded, so simultaneous senders never overwrite each other.
+- **AI cost/caching:** Gemini results are cached ~15 min per team; the flash model on the free tier is ample for a retreat. Add `&fresh=1` to a summarize call to bypass the cache.
+- **"Anyone" blocked by Workspace:** set access to **"Anyone with a Google account"** instead.
 - All data lives in **your** Google Sheet; the static site stores nothing.
 
 ## Repo layout
 
 ```
-index.html          Guided survey (the form members fill)
-present.html        Presenter setup + slide deck
+index.html          Team chooser + guided survey
+present.html        Presentation index + per-team deck + AI draft
 splash.html         Full-screen QR splash for the projector
-config.js           SCRIPT_URL (Apps Script /exec) + FORM_URL (QR target)
-qrcode.min.js       QR generator (qrcode-generator, MIT — vendored)
-apps-script/Code.gs Backend: paste into Apps Script bound to your Sheet
+teams.js            Per-team wording (EDIT to finalize each team)
+config.js           SCRIPT_URL + FORM_URL
+qrcode.min.js       QR generator (MIT, vendored)
+apps-script/Code.gs Backend: team tabs, counts, Gemini summarize, summary tabs
 ```
