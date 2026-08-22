@@ -350,3 +350,73 @@ function buildSummaryFor_(team) {
   sh.setColumnWidth(1, 400); sh.setColumnWidth(3, 240); sh.setColumnWidth(6, 240);
   sh.setFrozenRows(3);
 }
+
+/* ------------------------------------------------------------------ */
+/* One-time migration: split the legacy single "Responses" tab into    */
+/* per-team tabs, by contributor (team wasn't recorded on old rows).   */
+/* ------------------------------------------------------------------ */
+
+// STEP 1 — run this. It lists every contributor from the legacy "Responses"
+// tab onto a "_Migrate" tab. Fill column B with each person's team
+// (dropdown: assimilation / missions / discipleship / lifegroups), then STEP 2.
+function buildMigrationMap() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var src = ss.getSheetByName('Responses');
+  if (!src || src.getLastRow() < 2) throw new Error('No legacy "Responses" tab with data found.');
+  var vals = src.getRange(2, 1, src.getLastRow() - 1, HEADERS.length).getValues();
+  var seen = {}, names = [];
+  vals.forEach(function (r) {
+    var c = String(r[1] || '').trim();
+    if (c && !seen[c.toLowerCase()]) { seen[c.toLowerCase()] = 1; names.push(c); }
+  });
+  names.sort();
+  var sh = ss.getSheetByName('_Migrate') || ss.insertSheet('_Migrate');
+  sh.clear();
+  var rows = [['Contributor', 'Team']];
+  names.forEach(function (n) { rows.push([n, '']); });
+  sh.getRange(1, 1, rows.length, 2).setValues(rows);
+  sh.getRange(1, 1, 1, 2).setFontWeight('bold');
+  if (names.length) {
+    var rule = SpreadsheetApp.newDataValidation().requireValueInList(Object.keys(TEAMS), true).build();
+    sh.getRange(2, 2, names.length, 1).setDataValidation(rule);
+  }
+  sh.setColumnWidth(1, 240); sh.setColumnWidth(2, 200); sh.setFrozenRows(1);
+  SpreadsheetApp.getActiveSpreadsheet().toast(names.length + ' contributors listed on "_Migrate". Set each Team, then run runMigration.', 'Migrate', 8);
+}
+
+// STEP 2 — after filling column B on "_Migrate", run this. It copies each
+// legacy row into Responses_<team> by contributor, then renames the legacy
+// tab to an archive so it can't be migrated twice. Rows for contributors with
+// no team set are left in the archive (nothing is deleted).
+function runMigration() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var mapSh = ss.getSheetByName('_Migrate');
+  if (!mapSh || mapSh.getLastRow() < 2) throw new Error('Run buildMigrationMap first, then fill in the teams.');
+  var map = {};
+  mapSh.getRange(2, 1, mapSh.getLastRow() - 1, 2).getValues().forEach(function (r) {
+    var name = String(r[0] || '').trim().toLowerCase();
+    var team = String(r[1] || '').trim().toLowerCase();
+    if (name && TEAMS[team]) map[name] = team;
+  });
+  var src = ss.getSheetByName('Responses');
+  if (!src || src.getLastRow() < 2) throw new Error('No legacy "Responses" tab with data found.');
+  var vals = src.getRange(2, 1, src.getLastRow() - 1, HEADERS.length).getValues();
+  var buckets = {}, unassigned = 0;
+  vals.forEach(function (r) {
+    var team = map[String(r[1] || '').trim().toLowerCase()];
+    if (!team) { unassigned++; return; }
+    (buckets[team] = buckets[team] || []).push(r);
+  });
+  var lock = LockService.getScriptLock(); lock.waitLock(30000);
+  try {
+    Object.keys(buckets).forEach(function (team) {
+      var sh = sheetForTeam_(team), rows = buckets[team];
+      sh.getRange(sh.getLastRow() + 1, 1, rows.length, HEADERS.length).setValues(rows);
+    });
+    src.setName('Responses_ARCHIVE_' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd_HHmmss'));
+  } finally { lock.releaseLock(); }
+  var migrated = vals.length - unassigned;
+  var msg = 'Migrated ' + migrated + ' rows into team tabs. ' + unassigned + ' left unassigned (kept in the archived tab).';
+  Logger.log(msg);
+  SpreadsheetApp.getActiveSpreadsheet().toast(msg, 'Migrate', 10);
+}
