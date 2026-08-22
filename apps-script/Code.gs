@@ -420,3 +420,42 @@ function runMigration() {
   Logger.log(msg);
   SpreadsheetApp.getActiveSpreadsheet().toast(msg, 'Migrate', 10);
 }
+
+// FIX MISASSIGNMENTS — after correcting the Team column on "_Migrate",
+// run this. It re-reads every team tab and moves each contributor's rows into
+// the team the map now says. Contributors not in the map stay put. Nothing is
+// deleted — rows are only moved between team tabs. Safe to run repeatedly.
+function applyMigrateMap() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var mapSh = ss.getSheetByName('_Migrate');
+  if (!mapSh || mapSh.getLastRow() < 2) throw new Error('No "_Migrate" map found — run buildMigrationMap first.');
+  var map = {};
+  mapSh.getRange(2, 1, mapSh.getLastRow() - 1, 2).getValues().forEach(function (r) {
+    var n = String(r[0] || '').trim().toLowerCase(), t = String(r[1] || '').trim().toLowerCase();
+    if (n && TEAMS[t]) map[n] = t;
+  });
+  var teams = Object.keys(TEAMS);
+  var lock = LockService.getScriptLock(); lock.waitLock(60000);
+  var moved = 0;
+  try {
+    var out = {}; teams.forEach(function (t) { out[t] = []; });
+    teams.forEach(function (t) {
+      var sh = ss.getSheetByName('Responses_' + t);
+      if (!sh || sh.getLastRow() < 2) return;
+      var vals = sh.getRange(2, 1, sh.getLastRow() - 1, HEADERS.length).getValues();
+      vals.forEach(function (r) {
+        var target = map[String(r[1] || '').trim().toLowerCase()] || t;
+        out[target].push(r);
+        if (target !== t) moved++;
+      });
+    });
+    teams.forEach(function (t) {
+      var sh = sheetForTeam_(t);
+      if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, HEADERS.length).clearContent();
+      if (out[t].length) sh.getRange(2, 1, out[t].length, HEADERS.length).setValues(out[t]);
+    });
+  } finally { lock.releaseLock(); }
+  var msg = 'Applied map — moved ' + moved + ' rows to their correct team.';
+  Logger.log(msg);
+  SpreadsheetApp.getActiveSpreadsheet().toast(msg, 'Reassign', 8);
+}
