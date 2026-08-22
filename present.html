@@ -333,15 +333,16 @@ function renderPicks(){
   var bigs=DATA.byBucket.bigidea||[];
   if(bigs.length){
     bigs.forEach(function(it){
+      var because=it.why||it.measure||'';
       var row=document.createElement('button'); row.type='button'; row.className='pickitem'; row.style.width='100%'; row.style.textAlign='left';
-      row.innerHTML='<span style="flex:1"><span class="idea"></span>'+(it.measure?'<span class="meta"></span>':'')+(it.contributor?'<span class="who">— '+esc(it.contributor)+'</span>':'')+'</span>';
+      row.innerHTML='<span style="flex:1"><span class="idea"></span>'+(because?'<span class="meta"></span>':'')+(it.contributor?'<span class="who">— '+esc(it.contributor)+'</span>':'')+'</span>';
       row.querySelector('.idea').textContent=it.idea;
-      if(it.measure) row.querySelector('.meta').textContent='because '+it.measure;
-      row.addEventListener('click',function(){el('bigIdeaFinal').value=it.idea;el('bigWhyFinal').value=it.measure||'';});
+      if(because) row.querySelector('.meta').textContent='because '+because;
+      row.addEventListener('click',function(){el('bigIdeaFinal').value=it.idea;el('bigWhyFinal').value=because;});
       bl.appendChild(row);
     });
     // preload first
-    if(!el('bigIdeaFinal').value){el('bigIdeaFinal').value=bigs[0].idea;el('bigWhyFinal').value=bigs[0].measure||'';}
+    if(!el('bigIdeaFinal').value){el('bigIdeaFinal').value=bigs[0].idea;el('bigWhyFinal').value=bigs[0].why||bigs[0].measure||'';}
   } else {
     var e=document.createElement('div');e.className='emptybucket';e.textContent='No "one big idea" submitted — write your own below.';bl.appendChild(e);
   }
