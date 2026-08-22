@@ -1,18 +1,10 @@
 /**
  * LifePointe Assimilation Survey — configuration
  *
- * SCRIPT_URL: the Google Apps Script Web App /exec URL. Deploy
- *             apps-script/Code.gs from inside your Google Sheet
- *             (Deploy > New deployment > Web app, Execute as: Me,
- *             Who has access: Anyone), then paste the URL here.
- *             While this is empty the pages run in preview mode:
- *             the form simulates sending and the presentation shows
- *             sample data.
- *
- * FORM_URL:   the public link members should open — this is what the
- *             splash page encodes into the QR code.
+ * SCRIPT_URL: the Google Apps Script Web App /exec URL (backend).
+ * FORM_URL:   the public link members open — what the splash QR encodes.
  */
 window.APP_CONFIG = {
-  SCRIPT_URL: "",
-  FORM_URL: "https://jekayode.github.io/lpassiliatiomsurvey/"
+  SCRIPT_URL: "https://script.google.com/macros/s/AKfycbwRhOPKmMlPgVFNd8uTpZDnJuW82bxU_VLA87pJCjoniza0eeGBraIuF6KAC4-y3kpT/exec",
+  FORM_URL: "https://lprt.jekayode.com/"
 };
