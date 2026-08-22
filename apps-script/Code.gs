@@ -42,7 +42,7 @@ var SUMMARY_SECTIONS = [
   ['vision','Vision sentences'], ['bigidea','The one big idea']
 ];
 
-var GEMINI_MODEL = 'gemini-2.0-flash';
+var GEMINI_MODEL = 'gemini-3.6-flash';
 
 /* ------------------------------------------------------------------ */
 /* Web app entry points                                               */
