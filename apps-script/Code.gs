@@ -89,8 +89,16 @@ function submitResponse(payload) {
     ]);
   }
   if (!rows.length) throw new Error('No valid ideas to save.');
-  var sh = getSheet_();
-  sh.getRange(sh.getLastRow() + 1, 1, rows.length, HEADERS.length).setValues(rows);
+  // Serialize concurrent submissions so simultaneous senders never overwrite
+  // each other's rows (read-last-row + write must be atomic).
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000); // wait up to 20s for another writer to finish
+  try {
+    var sh = getSheet_();
+    sh.getRange(sh.getLastRow() + 1, 1, rows.length, HEADERS.length).setValues(rows);
+  } finally {
+    lock.releaseLock();
+  }
   return rows.length;
 }
 
