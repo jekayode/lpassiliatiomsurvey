@@ -175,6 +175,23 @@ input[type=text]:focus,textarea:focus{border-color:var(--focus-ring);box-shadow:
     </div>
   </div>
   <div class="idx-grid" id="idxGrid"></div>
+  <div id="idxPrepare" style="margin-top:6px"></div>
+</div>
+
+<div id="showScreen" style="display:none">
+  <div class="top">
+    <span class="ring r1"></span><span class="ring r2"></span>
+    <div class="top-inner">
+      <img class="logo" id="showLogo" alt="LifePointe" />
+      <span class="kicker"><span class="kd"></span>Ready to present</span>
+      <h1 class="page" id="showTeam">Team</h1>
+      <p class="sub" id="showSub">Loading the finalized slides…</p>
+    </div>
+  </div>
+  <div class="startbar">
+    <button type="button" class="btn btn-primary" id="showPresentBtn" disabled>Present slides</button>
+    <button type="button" class="btn btn-secondary" id="showRefreshBtn">Refresh</button>
+  </div>
 </div>
 
 <div id="setup">
@@ -263,8 +280,10 @@ input[type=text]:focus,textarea:focus{border-color:var(--focus-ring);box-shadow:
     </div>
 
     <div class="startbar">
-      <button type="button" class="btn btn-primary" id="startBtn">Start presentation</button>
+      <button type="button" class="btn btn-secondary" id="startBtn">Preview slides</button>
+      <button type="button" class="btn btn-primary" id="finalizeBtn">Finalize &amp; save</button>
     </div>
+    <p id="finalStatus" style="text-align:center;font-size:13.5px;color:var(--text-muted);margin:6px 0 0;min-height:18px"></p>
   </div>
 </div>
 
@@ -477,34 +496,56 @@ function listSlide(cls,kicker,title,items,foot,scopeLabel){
     (foot?'<div class="foot">'+esc(foot)+'</div>':'')+'</div>';
 }
 
-function buildSlides(){
-  var presenter=el('presenter').value.trim()||('The '+teamName()+' group');
-  var campus=el('campus').value.trim()||'LifePointe · Network-wide';
-  var dateStr=el('dateStr').value.trim();
-  var problem=el('problem').value.trim();
-  var vision=el('vision').value.trim();
-  var bigIdea=el('bigIdeaFinal').value.trim();
-  var bigWhy=el('bigWhyFinal').value.trim();
-  var gaps=selected('problem');
+// Gather the current final content into one saveable model.
+function deckModel(){
   var useAI=AI_GENERATED&&el('aiToggle')&&el('aiToggle').checked;
-  var S=[];
+  var stages=teamStages();
+  var hot=[]; var gc={};
+  ((DATA&&DATA.byBucket&&DATA.byBucket.journeygap)||[]).forEach(function(it){ if(/→/.test(it.idea)) gc[it.idea]=(gc[it.idea]||0)+1; });
+  var order=Object.keys(gc).sort(function(a,b){return gc[b]-gc[a];});
+  if(order.length){ order.slice(0,2).forEach(function(t){ t.split('→').forEach(function(n){ hot.push(n.trim()); }); }); }
+  else if(stages.length>2){ hot=[stages[1],stages[2]]; }
+  return {
+    team: teamName(),
+    objective: teamObjective(),
+    presenter: el('presenter').value.trim()||('The '+teamName()+' group'),
+    campus: el('campus').value.trim()||'LifePointe · Network-wide',
+    date: el('dateStr').value.trim(),
+    problem: el('problem').value.trim(),
+    problemPoints: selected('problem').map(function(it){return it.idea;}),
+    vision: el('vision').value.trim(),
+    stages: stages,
+    hot: hot,
+    quick: useAI?linesToItems(el('aiQuick').value):selected('quick'),
+    ninety: useAI?linesToItems(el('aiNinety').value):selected('ninety'),
+    long: useAI?linesToItems(el('aiLong').value):selected('long'),
+    bigIdea: { idea: el('bigIdeaFinal').value.trim(), because: el('bigWhyFinal').value.trim() }
+  };
+}
 
-  // 1 Title (with the objective as the lead)
+// Render the deck HTML from a saved/prepared model (used by both preview and show mode).
+function buildSlidesFromModel(m){
+  m=m||{};
+  var stages=(m.stages&&m.stages.length)?m.stages:BASE_STAGES;
+  var hotset={}; (m.hot||[]).forEach(function(h){hotset[h]=1;});
+  var team=m.team||'Assimilation', presenter=m.presenter||'', S=[];
+
+  // 1 Title
   S.push('<div class="slide light"><span class="ring r1"></span><span class="ring r2"></span><span class="dot"></span>'+
     '<img class="logo-tr" src="'+LOGO_COLOR+'" alt="LifePointe"/>'+
     '<div class="s-inner"><span class="kicker"><span class="kd"></span>Leaders retreat · 90-day plan</span>'+
     '<span class="script">radical transformation</span>'+
-    '<h2>Radical transformation in '+esc(teamName())+'</h2>'+
-    '<p class="lead">'+esc(teamObjective())+'</p></div>'+
-    '<div class="foot">'+esc(presenter)+' &nbsp;·&nbsp; '+esc(campus)+(dateStr?' &nbsp;·&nbsp; '+esc(dateStr):'')+'</div></div>');
+    '<h2>Radical transformation in '+esc(team)+'</h2>'+
+    '<p class="lead">'+esc(m.objective||'')+'</p></div>'+
+    '<div class="foot">'+esc(presenter)+' &nbsp;·&nbsp; '+esc(m.campus||'')+(m.date?' &nbsp;·&nbsp; '+esc(m.date):'')+'</div></div>');
 
   // 2 Problem
-  var gapRows=gaps.map(function(it){return '<div class="litem"><div class="num">!</div><div class="txt"><div class="h">'+esc(it.idea)+'</div></div></div>';}).join('');
+  var gapRows=(m.problemPoints||[]).map(function(idea){return '<div class="litem"><div class="num">!</div><div class="txt"><div class="h">'+esc(idea)+'</div></div></div>';}).join('');
   S.push('<div class="slide dark"><span class="ring r1"></span><span class="ring r2"></span>'+
     '<img class="logo-tr" src="'+LOGO_WHITE+'" alt="LifePointe"/>'+
     '<div class="s-inner"><span class="kicker"><span class="kd"></span>The problem</span>'+
     '<h2>Where we lose people</h2>'+
-    (problem?'<p class="lead">'+esc(problem)+'</p>':'')+
+    (m.problem?'<p class="lead">'+esc(m.problem)+'</p>':'')+
     (gapRows?'<div class="itemlist">'+gapRows+'</div>':'')+'</div></div>');
 
   // 3 Vision
@@ -512,18 +553,11 @@ function buildSlides(){
     '<img class="logo-tr" src="'+LOGO_WHITE+'" alt="LifePointe"/>'+
     '<div class="s-inner"><span class="kicker"><span class="kd"></span>Our vision</span>'+
     '<span class="script">imagine this</span>'+
-    '<div class="bigquote">'+esc(vision)+'</div></div>'+
-    '<div class="foot">Radical transformation · '+esc(teamName())+'</div></div>');
+    '<div class="bigquote">'+esc(m.vision||'')+'</div></div>'+
+    '<div class="foot">Radical transformation · '+esc(team)+'</div></div>');
 
-  // 4 Journey — highlight the stages around the most-marked leaks
-  var stages=teamStages();
-  var hot={};
-  var gc={}; (DATA.byBucket.journeygap||[]).forEach(function(it){ if(/→/.test(it.idea)) gc[it.idea]=(gc[it.idea]||0)+1; });
-  var order=Object.keys(gc).sort(function(a,b){return gc[b]-gc[a];});
-  var topGaps=order.slice(0,2); // highlight the two leakiest hand-offs
-  topGaps.forEach(function(t){ t.split('→').forEach(function(name){ hot[name.trim()]=1; }); });
-  if(!order.length){ hot[stages[1]]=1; hot[stages[2]]=1; } // fallback if no gaps marked
-  var jr=stages.map(function(s,i){return '<span class="jstage'+(hot[s]?' hot':'')+'">'+s+'</span>'+(i<stages.length-1?'<span class="jarrow">&#8594;</span>':'');}).join('');
+  // 4 Journey
+  var jr=stages.map(function(s,i){return '<span class="jstage'+(hotset[s]?' hot':'')+'">'+esc(s)+'</span>'+(i<stages.length-1?'<span class="jarrow">&#8594;</span>':'');}).join('');
   S.push('<div class="slide light"><span class="ring r1"></span><span class="ring r2"></span><span class="dot"></span>'+
     '<img class="logo-tr" src="'+LOGO_COLOR+'" alt="LifePointe"/>'+
     '<div class="s-inner"><span class="kicker"><span class="kd"></span>The journey</span>'+
@@ -531,24 +565,27 @@ function buildSlides(){
     '<div class="journey">'+jr+'</div>'+
     '<p class="jnote">Radical transformation means no one stalls between stages — and the biggest leaks (highlighted) get owned first.</p></div></div>');
 
-  // 5 Quick wins
-  S.push(listSlide('light','Start now · 7–14 days','Quick wins',useAI?linesToItems(el('aiQuick').value):selected('quick'),'Within 90 days'));
-  // 6 Ninety
-  S.push(listSlide('dark','Build within 90 days','90-day priorities',useAI?linesToItems(el('aiNinety').value):selected('ninety'),'Network-wide systems','Scope'));
-  // 7 Long
-  S.push(listSlide('light','Beyond 90 days','Long-term transformation',useAI?linesToItems(el('aiLong').value):selected('long'),'What assimilation becomes'));
+  // 5-7 Quick / 90-day / Long
+  S.push(listSlide('light','Start now · 7–14 days','Quick wins',m.quick||[],'Within 90 days'));
+  S.push(listSlide('dark','Build within 90 days','90-day priorities',m.ninety||[],'Network-wide systems','Scope'));
+  S.push(listSlide('light','Beyond 90 days','Long-term transformation',m.long||[],'What '+esc(team)+' becomes'));
 
   // 8 Big idea (closing)
+  var bi=(m.bigIdea||{});
   S.push('<div class="slide brand"><span class="ring r1"></span><span class="ring r2"></span>'+
     '<img class="logo-tr" src="'+LOGO_WHITE+'" alt="LifePointe"/>'+
     '<div class="s-inner"><span class="kicker"><span class="kd"></span>If we do only one thing</span>'+
     '<span class="script">the one big idea</span>'+
-    '<div class="bigquote">'+esc(bigIdea||'—')+'</div>'+
-    (bigWhy?'<div class="because"><b>Because</b> '+esc(bigWhy)+'</div>':'')+'</div>'+
+    '<div class="bigquote">'+esc(bi.idea||'—')+'</div>'+
+    (bi.because?'<div class="because"><b>Because</b> '+esc(bi.because)+'</div>':'')+'</div>'+
     '<div class="foot">'+esc(presenter)+'</div></div>');
 
   return S;
 }
+
+// SHOW_MODEL is set in show mode; otherwise build from the live prepared model.
+var SHOW_MODEL=null;
+function buildSlides(){ return buildSlidesFromModel(SHOW_MODEL || deckModel()); }
 
 /* ---------- DECK NAV ---------- */
 var cur=0, total=0;
@@ -621,7 +658,7 @@ function showIndex(){
   function render(){
     grid.innerHTML='';
     TEAMS.forEach(function(t){
-      var a=document.createElement('a'); a.className='teamcard'; a.href='?team='+encodeURIComponent(t.id);
+      var a=document.createElement('a'); a.className='teamcard'; a.href='?team='+encodeURIComponent(t.id)+'&show=1';
       var n=counts[t.id];
       a.innerHTML='<span class="tc-n"></span><span class="tc-b"><span class="tc-name"></span><span class="tc-blurb"></span><span class="tc-count"></span></span><span class="tc-go">→</span>';
       a.querySelector('.tc-n').textContent=t.name.charAt(0);
@@ -636,14 +673,75 @@ function showIndex(){
     fetch(SCRIPT_URL+'?action=counts').then(function(r){return r.json();}).then(function(d){ if(d&&d.ok){counts=d.counts||{};render();} }).catch(function(){});
   }
 }
+// ---- prepare links (team-lead) shown on the index ----
+function renderPrepareLinks(){
+  var pre=el('idxPrepare'); if(!pre) return;
+  var origin=location.origin+location.pathname;
+  pre.innerHTML='<details class="card" style="max-width:720px;margin:0 auto"><summary style="cursor:pointer;font-weight:700;font-family:var(--font-heading);font-size:16px">Team-lead prepare links <span class="hint" style="font-weight:500">(send each leader their link to build &amp; finalize slides)</span></summary><div style="margin-top:10px" id="prepList"></div></details>';
+  var list=el('prepList');
+  TEAMS.forEach(function(t){
+    var url=origin+'?team='+encodeURIComponent(t.id);
+    var row=document.createElement('div'); row.style.cssText='display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border-subtle)';
+    row.innerHTML='<span style="flex:none;font-weight:700;min-width:110px"></span><span class="u" style="flex:1;min-width:0;font-size:13px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span><button type="button" class="btn btn-secondary" style="min-height:34px;padding:6px 14px;font-size:13px">Copy</button>';
+    row.children[0].textContent=t.name; row.querySelector('.u').textContent=url;
+    row.querySelector('button').addEventListener('click',function(){ if(navigator.clipboard) navigator.clipboard.writeText(url); var b=this; b.textContent='Copied'; setTimeout(function(){b.textContent='Copy';},1200); });
+    list.appendChild(row);
+  });
+}
+
+// ---- finalize (lead saves the deck) ----
+function finalize(){
+  var st=el('finalStatus'); st.style.color='var(--text-muted)'; st.textContent='Saving…'; el('finalizeBtn').disabled=true;
+  var deck=deckModel(); var p;
+  if(SCRIPT_URL){
+    p=fetch(SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'save_final',team:TEAM.id,deck:deck})}).then(function(r){return r.json();}).then(function(d){ if(!d||d.ok!==true) throw new Error((d&&d.error)||'Save failed'); });
+  } else {
+    p=new Promise(function(res){ try{localStorage.setItem('final_'+TEAM.id,JSON.stringify({deck:deck,updatedAt:new Date().toISOString()}));}catch(e){} setTimeout(res,300); });
+  }
+  p.then(function(){ st.style.color='var(--color-orange-deep)'; st.textContent='Finalized — the media team can now present. ('+new Date().toLocaleTimeString()+')'; })
+   .catch(function(err){ st.style.color='var(--color-red)'; st.textContent='Could not save: '+(err&&err.message?err.message:err); })
+   .then(function(){ el('finalizeBtn').disabled=false; });
+}
+
+// ---- show mode (media presents the finalized deck) ----
+function loadFinal(){
+  if(SCRIPT_URL){ return fetch(SCRIPT_URL+'?action=final&team='+encodeURIComponent(TEAM.id)).then(function(r){return r.json();}); }
+  var ls=localStorage.getItem('final_'+TEAM.id); var parsed=ls?JSON.parse(ls):null;
+  return Promise.resolve({ok:true,deck:parsed?parsed.deck:null,updatedAt:parsed?parsed.updatedAt:null});
+}
+function loadShow(){
+  el('showSub').textContent='Loading the finalized slides…'; el('showPresentBtn').disabled=true;
+  loadFinal().then(function(d){
+    if(d&&d.ok&&d.deck){
+      SHOW_MODEL=d.deck; el('showTeam').textContent=teamName();
+      el('showSub').textContent='Finalized'+(d.updatedAt?' '+new Date(d.updatedAt).toLocaleString():'')+'. Click Present, then use the arrows or dots.';
+      el('showPresentBtn').disabled=false;
+    } else {
+      SHOW_MODEL=null; el('showTeam').textContent=teamName();
+      el('showSub').textContent='The team lead has not finalized this yet — refresh once they have.';
+      el('showPresentBtn').disabled=true;
+    }
+  }).catch(function(){ el('showSub').textContent='Could not load — tap Refresh.'; });
+}
+
 el('aiBtn').addEventListener('click',generateAI);
+el('finalizeBtn').addEventListener('click',finalize);
+el('showPresentBtn').addEventListener('click',showDeck);
+el('showRefreshBtn').addEventListener('click',loadShow);
+el('showLogo').src=LOGO_COLOR;
+
+var IS_SHOW=new URLSearchParams(location.search).get('show')==='1';
 function initPresent(){
   if(!TEAM){
     el('setup').style.display='none';
     el('present-index').style.display='block';
-    showIndex();
+    showIndex(); renderPrepareLinks();
+  } else if(IS_SHOW){
+    el('setup').style.display='none';
+    el('showScreen').style.display='block';
+    loadShow();
   } else {
-    var h=document.querySelector('#setup h1.page'); if(h) h.textContent='Present — '+teamName();
+    var h=document.querySelector('#setup h1.page'); if(h) h.textContent='Prepare — '+teamName();
     refresh();
   }
 }

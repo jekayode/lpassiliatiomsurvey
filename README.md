@@ -8,8 +8,9 @@ A guided-conversation survey + AI-assisted presentation for the leadership-retre
 |---|---|---|
 | Splash / QR | `…/splash.html` | Show on the LED first — everyone scans |
 | Form (chooser) | `…/` | Choose a group → guided survey |
-| Presentation index | `…/present.html` | Pick a team → its deck |
-| A team's deck | `…/present.html?team=<id>` | The team lead's setup + slides |
+| Presentation index | `…/present.html` | Media: pick a team to present · plus team-lead prepare links |
+| Prepare (team lead) | `…/present.html?team=<id>` | Lead builds, AI-drafts, edits, and **finalizes** the deck |
+| Present (media) | `…/present.html?team=<id>&show=1` | Media plays the **finalized** deck, read-only |
 
 Team ids: `assimilation`, `missions`, `discipleship`, `lifegroups`.
 
@@ -38,11 +39,13 @@ Choose a group → submit one idea → a row appears in that team's tab. Open `p
 
 ## On the day
 
+Finalizing and presenting are **separate**, so a lead can prepare on their own phone and the media team presents on the projector — the two devices are not linked.
+
 1. **splash.html** on the LED → everyone scans, **chooses their group**, fills the guided survey.
-2. Each **team lead** opens **present.html**, picks their team, clicks **Refresh** to pull submissions, then either:
-   - **Generate with AI** — Gemini drafts problem / vision / quick wins / 90-day / long-term / big idea into editable fields; tweak, then **Start presentation**; or
-   - **Curate manually** — tick the best ~3 per section (the AI step is optional).
-3. Present with the on-screen arrows, keyboard **← →**, or dots. **Esc** exits.
+2. **Each team lead** (on their own device) opens their **prepare link** `present.html?team=<id>` — get these from the *Team-lead prepare links* panel on `present.html`. They:
+   - **Refresh** to pull submissions, then **Generate with AI** (Gemini drafts problem / vision / quick wins / 90-day / long-term / big idea into editable fields) — or curate manually by ticking ~3 per section;
+   - edit anything, **Preview slides** to check, then **Finalize & save**. That stores the deck (in the `Finals` tab).
+3. **The media team** opens `present.html` on the projector, clicks a team (→ `?team=<id>&show=1`), and hits **Present slides**. It plays the **finalized** deck read-only — arrows, keyboard **← →**, or dots; **Esc** exits. A lead editing later doesn't change a running show until the media hits **Refresh**.
 
 ## Good to know
 
@@ -50,6 +53,7 @@ Choose a group → submit one idea → a row appears in that team's tab. Open `p
 - **Concurrency:** submissions are lock-guarded, so simultaneous senders never overwrite each other.
 - **AI cost/caching:** Gemini results are cached ~15 min per team; the flash model on the free tier is ample for a retreat. Add `&fresh=1` to a summarize call to bypass the cache.
 - **"Anyone" blocked by Workspace:** set access to **"Anyone with a Google account"** instead.
+- **Finalized decks** are saved (one row per team) in the `Finals` tab — that's the snapshot the media presents. Re-finalizing overwrites it.
 - All data lives in **your** Google Sheet; the static site stores nothing.
 
 ## Repo layout

@@ -59,6 +59,7 @@ function doGet(e) {
     var action = (p.action || 'responses').toLowerCase();
     if (action === 'counts') return json_({ ok: true, counts: getCounts_() });
     if (action === 'summarize') return json_({ ok: true, team: normTeam_(p.team), slides: summarizeTeam_(p.team, p.fresh === '1') });
+    if (action === 'final') return json_(getFinal_(p.team));
     return json_(getResponses(normTeam_(p.team)));
   } catch (err) {
     return json_({ ok: false, error: String(err && err.message ? err.message : err) });
@@ -69,6 +70,8 @@ function doPost(e) {
   try {
     if (!e || !e.postData || !e.postData.contents) throw new Error('Empty request.');
     var payload = JSON.parse(e.postData.contents);
+    var action = String(payload.action || 'submit').toLowerCase();
+    if (action === 'save_final') { saveFinal_(payload.team, payload.deck); return json_({ ok: true, saved: true }); }
     var saved = submitResponse(payload);
     return json_({ ok: true, saved: saved });
   } catch (err) {
@@ -155,6 +158,64 @@ function getCounts_() {
     counts[t] = (sh && sh.getLastRow() > 1) ? sh.getLastRow() - 1 : 0;
   });
   return counts;
+}
+
+/* ------------------------------------------------------------------ */
+/* Finalized decks (lead finalizes; media presents)                   */
+/* ------------------------------------------------------------------ */
+
+function finalsSheet_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName('Finals');
+  if (!sh) {
+    sh = ss.insertSheet('Finals');
+    sh.getRange(1, 1, 1, 3).setValues([['Team', 'UpdatedAt', 'DeckJSON']]).setFontWeight('bold');
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+// Upsert the finalized deck for a team (one row per team).
+function saveFinal_(team, deck) {
+  team = normTeam_(team);
+  if (!deck || typeof deck !== 'object') throw new Error('No deck to save.');
+  var jsonStr = JSON.stringify(deck);
+  if (jsonStr.length > 45000) throw new Error('Deck too large to save.');
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    var sh = finalsSheet_();
+    var last = sh.getLastRow();
+    var row = 0;
+    if (last > 1) {
+      var teams = sh.getRange(2, 1, last - 1, 1).getValues();
+      for (var i = 0; i < teams.length; i++) {
+        if (String(teams[i][0]).toLowerCase() === team) { row = i + 2; break; }
+      }
+    }
+    if (!row) row = sh.getLastRow() + 1;
+    sh.getRange(row, 1, 1, 3).setValues([[team, new Date(), jsonStr]]);
+  } finally {
+    lock.releaseLock();
+  }
+  return true;
+}
+
+function getFinal_(team) {
+  team = normTeam_(team);
+  var sh = finalsSheet_();
+  var last = sh.getLastRow();
+  if (last > 1) {
+    var vals = sh.getRange(2, 1, last - 1, 3).getValues();
+    for (var i = 0; i < vals.length; i++) {
+      if (String(vals[i][0]).toLowerCase() === team) {
+        var deck = null;
+        try { deck = JSON.parse(vals[i][2]); } catch (e) { deck = null; }
+        return { ok: true, team: team, deck: deck, updatedAt: vals[i][1] ? new Date(vals[i][1]).toISOString() : null };
+      }
+    }
+  }
+  return { ok: true, team: team, deck: null, updatedAt: null };
 }
 
 /* ------------------------------------------------------------------ */
