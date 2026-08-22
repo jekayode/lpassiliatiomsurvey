@@ -344,7 +344,7 @@ var SAMPLE={count:0,byBucket:emptyBuckets()};
 var USING_SAMPLE=false;
 function loadData(){
   if(SCRIPT_URL){
-    return fetch(SCRIPT_URL+'?action=responses&team='+encodeURIComponent(TEAM.id)).then(function(r){
+    return fetch(SCRIPT_URL+'?action=responses&team='+encodeURIComponent(TEAM.id)+'&_='+Date.now()).then(function(r){
       if(!r.ok) throw new Error('Network error ('+r.status+')');
       return r.json();
     }).then(function(d){
@@ -646,7 +646,7 @@ function generateAI(){
   el('aiBtn').disabled=true;
   var p;
   if(SCRIPT_URL){
-    p=fetch(SCRIPT_URL+'?action=summarize&team='+encodeURIComponent(TEAM.id)).then(function(r){return r.json();}).then(function(d){ if(!d||d.ok!==true) throw new Error((d&&d.error)||'AI error'); if(!d.slides) throw new Error('AI not available yet — update the backend (Code.gs) and set GEMINI_API_KEY.'); return d.slides; });
+    p=fetch(SCRIPT_URL+'?action=summarize&team='+encodeURIComponent(TEAM.id)+'&_='+Date.now()).then(function(r){return r.json();}).then(function(d){ if(!d||d.ok!==true) throw new Error((d&&d.error)||'AI error'); if(!d.slides) throw new Error('AI not available yet — update the backend (Code.gs) and set GEMINI_API_KEY.'); return d.slides; });
   } else { p=new Promise(function(res){ setTimeout(function(){res(stubSlides());},600); }); }
   p.then(function(sl){ applyAI(sl); }).catch(function(err){ st.style.color='var(--color-red)'; st.textContent='Could not generate: '+(err&&err.message?err.message:err); })
    .then(function(){ el('aiBtn').disabled=false; el('aiBtn').textContent='Regenerate with AI'; });
@@ -670,7 +670,7 @@ function showIndex(){
   }
   render();
   if(SCRIPT_URL){
-    fetch(SCRIPT_URL+'?action=counts').then(function(r){return r.json();}).then(function(d){ if(d&&d.ok){counts=d.counts||{};render();} }).catch(function(){});
+    fetch(SCRIPT_URL+'?action=counts&_='+Date.now()).then(function(r){return r.json();}).then(function(d){ if(d&&d.ok){counts=d.counts||{};render();} }).catch(function(){});
   }
 }
 // ---- prepare links (team-lead) shown on the index ----
@@ -705,7 +705,7 @@ function finalize(){
 
 // ---- show mode (media presents the finalized deck) ----
 function loadFinal(){
-  if(SCRIPT_URL){ return fetch(SCRIPT_URL+'?action=final&team='+encodeURIComponent(TEAM.id)).then(function(r){return r.json();}); }
+  if(SCRIPT_URL){ return fetch(SCRIPT_URL+'?action=final&team='+encodeURIComponent(TEAM.id)+'&_='+Date.now()).then(function(r){return r.json();}); }
   var ls=localStorage.getItem('final_'+TEAM.id); var parsed=ls?JSON.parse(ls):null;
   return Promise.resolve({ok:true,deck:parsed?parsed.deck:null,updatedAt:parsed?parsed.updatedAt:null});
 }
